@@ -9,8 +9,8 @@ app = Flask(__name__)
 UPSTREAM_BASE = os.environ.get("UPSTREAM_BASE", "https://api.hcnsec.cn/v1")
 UPSTREAM_KEY = os.environ.get("UPSTREAM_KEY", "sk-Nmc4lFC5KzsRLiNqc5nN4xKLA8kdRwfwavjyivUJqTPnAdAK")
 
-# Default model if not specified in request
-DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "DeepSeek-V4-Pro")
+# Default model
+DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "glm-5.2")
 
 @app.route('/')
 def index():
@@ -18,7 +18,6 @@ def index():
 
 @app.route('/v1/models', methods=['GET'])
 def list_models():
-    """Forward model list from China API"""
     headers = {
         "Authorization": f"Bearer {UPSTREAM_KEY}",
         "Accept": "application/json",
@@ -41,7 +40,6 @@ def proxy_messages():
         temperature = anthropic_data.get('temperature', 0.7)
         system = anthropic_data.get('system', None)
         
-        # Convert Anthropic messages to OpenAI format
         openai_messages = []
         if system:
             openai_messages.append({"role": "system", "content": system})
@@ -49,12 +47,9 @@ def proxy_messages():
         for msg in messages:
             role = msg.get('role')
             content = msg.get('content', '')
-            # Anthropic uses "assistant" and "user"; we keep them as is
             if role in ['user', 'assistant']:
                 openai_messages.append({"role": role, "content": content})
-            # Handle tool results if needed (ignore for now)
         
-        # Build OpenAI request
         openai_payload = {
             "model": model,
             "messages": openai_messages,
@@ -63,7 +58,6 @@ def proxy_messages():
             "stream": False
         }
         
-        # Send to China API
         headers = {
             "Authorization": f"Bearer {UPSTREAM_KEY}",
             "Content-Type": "application/json",
@@ -80,7 +74,6 @@ def proxy_messages():
         if resp.status_code != 200:
             return jsonify({"error": resp.text}), resp.status_code
         
-        # Convert OpenAI response back to Anthropic format
         openai_result = resp.json()
         choices = openai_result.get('choices', [])
         if not choices:
@@ -110,7 +103,7 @@ def proxy_messages():
 
 @app.route('/v1/chat/completions', methods=['POST'])
 def proxy_openai():
-    """Direct pass-through for OpenAI clients (optional)"""
+    """Direct pass-through for OpenAI clients"""
     headers = {
         "Authorization": f"Bearer {UPSTREAM_KEY}",
         "Content-Type": "application/json",
